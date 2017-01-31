@@ -1,0 +1,31 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "dGXnnR7ZhsrZNnEqFimk6q7YCqs=",
+			"path": "github.com/Sirupsen/logrus",
+			"revision": "61e43dc76f7ee59a82bdf3d71033dc12bea4c77d",
+			"revisionTime": "2017-01-13T01:19:11Z"
+		},
+		{
+			"checksumSHA1": "/zxxFPYjUB7Wowz33r5AhTDvoz0=",
+			"path": "github.com/coreos/go-systemd/dbus",
+			"revision": "34529cec056a9a08b7fe216c2deb674cc9c46419",
+			"revisionTime": "2017-01-30T11:21:31Z"
+		},
+		{
+			"checksumSHA1": "Y03oV8ua8TBsSFozViEo7U4dXCE=",
+			"path": "github.com/godbus/dbus",
+			"revision": "4b24ebee04561bf8a3bcc09aead82062edc56778",
+			"revisionTime": "2016-12-02T21:35:00Z"
+		},
+		{
+			"checksumSHA1": "uTQtOqR0ePMMcvuvAIksiIZxhqU=",
+			"path": "golang.org/x/sys/unix",
+			"revision": "d75a52659825e75fff6158388dddc6a5b04f9ba5",
+			"revisionTime": "2016-12-14T18:38:57Z"
+		}
+	],
+	"rootPath": "github.com/mesosphere/journald-scale-test/supervisor"
+}
