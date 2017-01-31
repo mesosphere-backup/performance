@@ -3,6 +3,8 @@ package watch
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -12,23 +14,17 @@ import (
 	"github.com/mesosphere/journald-scale-test/supervisor/systemd"
 )
 
+type Event map[string]interface{}
+
 // StartWatcher starts watching host systemd units
-func StartWatcher(ctx context.Context) {
+func StartWatcher(ctx context.Context, backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	// TODO: move to config
-	bq, err := backend.NewFlatBigQuery(ctx, "massive-bliss-781", "dcos_performance2", "mnaboka")
-	if err != nil {
-		panic("Unable to initialze big query backend: " + err.Error())
-	}
-
 	resultChan := make(chan *SystemdUnitStatus)
 
-	// TODO: move to constructor
-	backends := []backend.Backend{bq}
-	go processResult(ctx, resultChan, backends)
+	go processResult(ctx, resultChan, backends, eventChan)
 
 	for {
 		select {
@@ -82,33 +78,50 @@ func handleUnit(unit *systemd.SystemdUnitProps, wg *sync.WaitGroup, resultChan c
 	}
 }
 
-func processResult(ctx context.Context, results <-chan *SystemdUnitStatus, backends []backend.Backend) {
+func processResult(ctx context.Context, results <-chan *SystemdUnitStatus, backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) {
 	rows := []*backend.BigQueryRow{}
+	updateTime := time.Now()
+	hostname, err := os.Hostname()
+	if err != nil {
+		logrus.Errorf("Unable to determine hostname: %s", err)
+		hostname = "<undefined>"
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			logrus.Infof("Shutting down result processor")
 			return
+
+		case event := <-eventChan:
+			if err := upload(ctx, []*backend.BigQueryRow{event.ToBigQueryRow()}, backends); err != nil {
+				logrus.Errorf("Error saving a new event: %s", err)
+			}
+
 		case result := <-results:
 			logrus.Debugf("[%s]: User %f; System %f; Total %f", result.Name,
 				result.CPUUsage.User, result.CPUUsage.System, result.CPUUsage.Total)
 
-			row := backend.NewBigQueryRow()
-			row.Data["Name"] = result.Name
-			row.Data["Timestamp"] = time.Now()
-			row.Data["UserCPU_Usage"] = result.CPUUsage.User
-			row.Data["SystemCPU_Usage"] = result.CPUUsage.User
-			row.Data["TotalCPU_Usage"] = result.CPUUsage.Total
+			row := backend.BigQuerySchema{
+				Name: result.Name,
+				Timestamp: time.Now(),
+				UserCPU_Usage: result.CPUUsage.User,
+				SystemCPU_Usage: result.CPUUsage.User,
+				TotalCPU_Usage: result.CPUUsage.Total,
+				Hostname: hostname,
+				Instance: strconv.Itoa(int(result.Pid)),
+			}
 
-			rows = append(rows, row)
+			rows = append(rows, row.ToBigQueryRow())
 
 			//TODO: move to config and add to drain after certain time elapsed
-			if len(rows) > 100 {
+			if len(rows) > 1000 || time.Since(updateTime) > time.Second * 10 {
 				if err := upload(ctx, rows, backends); err != nil {
 					logrus.Error(err)
 					continue
 				}
 				rows = []*backend.BigQueryRow{}
+				updateTime = time.Now()
 			}
 		}
 	}

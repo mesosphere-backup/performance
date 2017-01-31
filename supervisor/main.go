@@ -1,11 +1,10 @@
 package main
 
 import (
-	"context"
-
-	"github.com/mesosphere/journald-scale-test/supervisor/watch"
+	"github.com/Sirupsen/logrus"
+	"github.com/mesosphere/journald-scale-test/supervisor/api"
 )
 
 func main() {
-	watch.StartWatcher(context.Background())
+	logrus.Fatal(api.StartWebServer())
 }

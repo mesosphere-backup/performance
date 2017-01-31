@@ -1,6 +1,8 @@
 package systemd
 
 import (
+	"strings"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/coreos/go-systemd/dbus"
 )
@@ -43,6 +45,11 @@ func GetSystemdUnitsProps() ([]*SystemdUnitProps, error) {
 
 		if mainPID == 0 {
 			logrus.Debugf("Skipped unit %s has MainPID value = 0.")
+			continue
+		}
+
+		if strings.HasPrefix(prop.Name, "ssh@") {
+			logrus.Debugf("Skipped ssh session")
 			continue
 		}
 
