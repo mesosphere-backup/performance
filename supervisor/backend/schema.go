@@ -8,13 +8,13 @@ import (
 
 // google store table schema
 type BigQuerySchema struct {
-	Name            string
-	Timestamp       time.Time
+	Name            string    `json:"name"`
+	Timestamp       time.Time `json:"timestamp"`
 	UserCPU_Usage   float64
 	SystemCPU_Usage float64
 	TotalCPU_Usage  float64
-	Hostname        string
-	Instance        string
+	Hostname        string `json:"hostname"`
+	Instance        string `json:"instance"`
 }
 
 func (b *BigQuerySchema) ToBigQueryRow() *BigQueryRow {
