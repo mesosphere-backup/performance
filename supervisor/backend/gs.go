@@ -84,3 +84,16 @@ func (t *FlatBigQuery) Put(ctx context.Context, item interface{}) error {
 
 	return t.uploader.Put(ctx, rows)
 }
+
+func (t *FlatBigQuery) CreateTable(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	schema, err := bigquery.InferSchema(BigQuerySchema{})
+	if err != nil {
+		return err
+	}
+
+	return t.client.Dataset(t.Dataset).Table(t.TableName).Create(ctx, schema)
+}

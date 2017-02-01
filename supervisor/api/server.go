@@ -50,6 +50,10 @@ func StartWebServer(cfg *config.Config) error {
 		return err
 	}
 
+	if err := bq.CreateTable(ctx); err != nil {
+		logrus.Warning(err)
+	}
+
 	job := &Job{
 		cancel:   cancel,
 		backends: []backend.Backend{bq},
