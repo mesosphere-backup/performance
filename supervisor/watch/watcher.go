@@ -10,6 +10,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/mesosphere/journald-scale-test/supervisor/backend"
+	"github.com/mesosphere/journald-scale-test/supervisor/config"
 	"github.com/mesosphere/journald-scale-test/supervisor/proc"
 	"github.com/mesosphere/journald-scale-test/supervisor/systemd"
 )
@@ -17,41 +18,46 @@ import (
 type Event map[string]interface{}
 
 // StartWatcher starts watching host systemd units
-func StartWatcher(ctx context.Context, backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) {
+func StartWatcher(ctx context.Context, cfg *config.Config, buffer int, uploadInterval time.Duration,
+	          backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	resultChan := make(chan *SystemdUnitStatus)
 
-	go processResult(ctx, resultChan, backends, eventChan)
+	go processResult(ctx, buffer, uploadInterval, resultChan, backends, eventChan)
 
 	for {
+		if err := processUnits(ctx, cfg, resultChan); err != nil {
+			return err
+		}
+
 		select {
 		case <-ctx.Done():
-			logrus.Info("Stop monitoring")
-			return
-		default:
+			logrus.Info("Shutting down watcher")
+			close(resultChan)
+			return nil
+
+		case <-time.After(cfg.Wait):
 		}
-
-		logrus.Println("Start monitoring")
-		units, err := systemd.GetSystemdUnitsProps()
-		if err != nil {
-			logrus.Errorf("Unable to get a list of systemd units: %s", err)
-			continue
-		}
-
-		wg := &sync.WaitGroup{}
-
-		for _, unit := range units {
-			wg.Add(1)
-			go handleUnit(unit, wg, resultChan)
-		}
-
-		logrus.Info("Waiting for results")
-		wg.Wait()
-		logrus.Info("Done")
 	}
+}
+
+func processUnits(ctx context.Context, cfg *config.Config, resultChan chan<- *SystemdUnitStatus) error {
+	units, err := systemd.GetSystemdUnitsProps()
+	if err != nil {
+		return fmt.Errorf("Unable to get a list of systemd units: %s", err)
+	}
+
+	wg := &sync.WaitGroup{}
+	for _, unit := range units {
+		wg.Add(1)
+		go handleUnit(ctx, unit, cfg, wg, resultChan)
+	}
+
+	wg.Wait()
+	return nil
 }
 
 // SystemdUnitStatus a structure that holds systemd unit name, pid and cpu utilization by it.
@@ -61,24 +67,29 @@ type SystemdUnitStatus struct {
 	CPUUsage *proc.CPUPidUsage
 }
 
-func handleUnit(unit *systemd.SystemdUnitProps, wg *sync.WaitGroup, resultChan chan<- *SystemdUnitStatus) {
+func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *config.Config, wg *sync.WaitGroup, resultChan chan<- *SystemdUnitStatus) {
 	defer wg.Done()
 
-	// TODO: move to config
-	usage, err := proc.LoadByPID(int32(unit.Pid), time.Second*2)
+	usage, err := proc.LoadByPID(int32(unit.Pid), cfg.CPUUsageInterval)
 	if err != nil {
 		logrus.Errorf("Unit %s. Error %s", unit.Name, err)
 		return
 	}
 
-	resultChan <- &SystemdUnitStatus{
-		Name:     unit.Name,
-		Pid:      unit.Pid,
-		CPUUsage: usage,
+	select {
+	case <- ctx.Done():
+		return
+	default:
+		resultChan <- &SystemdUnitStatus{
+			Name:     unit.Name,
+			Pid:      unit.Pid,
+			CPUUsage: usage,
+		}
 	}
 }
 
-func processResult(ctx context.Context, results <-chan *SystemdUnitStatus, backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) {
+func processResult(ctx context.Context, bufferSize int, uploadInterval time.Duration, results <-chan *SystemdUnitStatus,
+	           backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) {
 	rows := []*backend.BigQueryRow{}
 	updateTime := time.Now()
 	hostname, err := os.Hostname()
@@ -113,9 +124,7 @@ func processResult(ctx context.Context, results <-chan *SystemdUnitStatus, backe
 			}
 
 			rows = append(rows, row.ToBigQueryRow())
-
-			//TODO: move to config and add to drain after certain time elapsed
-			if len(rows) > 1000 || time.Since(updateTime) > time.Second * 10 {
+			if len(rows) >= bufferSize || time.Since(updateTime) >= uploadInterval {
 				if err := upload(ctx, rows, backends); err != nil {
 					logrus.Error(err)
 					continue

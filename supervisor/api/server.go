@@ -2,15 +2,16 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/mesosphere/journald-scale-test/supervisor/backend"
+	"github.com/mesosphere/journald-scale-test/supervisor/config"
 	"github.com/mesosphere/journald-scale-test/supervisor/watch"
-	"encoding/json"
-	"time"
 )
 
 type key int
@@ -26,7 +27,6 @@ type Job struct {
 }
 
 func newContextWithJob(ctx context.Context, job *Job, req *http.Request) context.Context {
-
 	return context.WithValue(ctx, requestIDKey, job)
 }
 
@@ -42,12 +42,12 @@ func middleware(next http.Handler, job *Job) http.Handler {
 }
 
 // StartWebServer starts a gorilla mux web server.
-func StartWebServer() error {
+func StartWebServer(cfg *config.Config) error {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	bq, err := backend.NewFlatBigQuery(ctx, "massive-bliss-781", "dcos_performance2", "mnaboka")
+	bq, err := backend.NewFlatBigQuery(ctx, cfg.FlagProjectID, cfg.FlagDataSet, cfg.FlagTableName)
 	if err != nil {
-		panic("Unable to initialze big query backend: " + err.Error())
+		return err
 	}
 
 	job := &Job{
@@ -56,14 +56,13 @@ func StartWebServer() error {
 		events: make(chan *backend.BigQuerySchema),
 	}
 
-	go watch.StartWatcher(ctx, job.backends, job.events)
+	go watch.StartWatcher(ctx, cfg, cfg.FlagBufferSize, cfg.UploadInterval, job.backends, job.events)
 
 	router := mux.NewRouter()
 	router.Path("/incoming").Handler(middleware(http.HandlerFunc(event), job)).Methods("POST")
 
-	// TODO: move to config
-	logrus.Infof("Start web server :9123")
-	return http.ListenAndServe(":9123", router)
+	logrus.Infof("Start web server %s", cfg.FlagWebServerBind)
+	return http.ListenAndServe(cfg.FlagWebServerBind, router)
 }
 
 // handlers
