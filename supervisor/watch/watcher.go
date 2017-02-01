@@ -66,6 +66,17 @@ type SystemdUnitStatus struct {
 	CPUUsage *proc.CPUPidUsage
 }
 
+func (s *SystemdUnitStatus) ToBigQuerySchema() *backend.BigQuerySchema {
+	return &backend.BigQuerySchema{
+		Name:            s.Name,
+		Timestamp:       time.Now(),
+		UserCPU_Usage:   s.CPUUsage.User,
+		SystemCPU_Usage: s.CPUUsage.User,
+		TotalCPU_Usage:  s.CPUUsage.Total,
+		Instance:        strconv.Itoa(int(s.Pid)),
+	}
+}
+
 func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *config.Config, wg *sync.WaitGroup, resultChan chan<- *SystemdUnitStatus) {
 	defer wg.Done()
 
@@ -112,15 +123,8 @@ func processResult(ctx context.Context, cfg *config.Config, results <-chan *Syst
 			logrus.Debugf("[%s]: User %f; System %f; Total %f", result.Name,
 				result.CPUUsage.User, result.CPUUsage.System, result.CPUUsage.Total)
 
-			row := backend.BigQuerySchema{
-				Name:            result.Name,
-				Timestamp:       time.Now(),
-				UserCPU_Usage:   result.CPUUsage.User,
-				SystemCPU_Usage: result.CPUUsage.User,
-				TotalCPU_Usage:  result.CPUUsage.Total,
-				Hostname:        hostname,
-				Instance:        strconv.Itoa(int(result.Pid)),
-			}
+			row := result.ToBigQuerySchema()
+			row.Hostname = hostname
 
 			rows = append(rows, row.ToBigQueryRow())
 			if len(rows) >= cfg.FlagBufferSize || time.Since(updateTime) >= cfg.UploadInterval {
