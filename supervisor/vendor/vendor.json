@@ -15,6 +15,12 @@
 			"revisionTime": "2017-01-30T11:21:31Z"
 		},
 		{
+			"checksumSHA1": "40Ns85VYa4smQPcewZ7SOdfLnKU=",
+			"path": "github.com/fatih/structs",
+			"revision": "a720dfa8df582c51dee1b36feabb906bde1588bd",
+			"revisionTime": "2017-01-03T08:10:50Z"
+		},
+		{
 			"checksumSHA1": "Y03oV8ua8TBsSFozViEo7U4dXCE=",
 			"path": "github.com/godbus/dbus",
 			"revision": "4b24ebee04561bf8a3bcc09aead82062edc56778",
