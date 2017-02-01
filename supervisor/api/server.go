@@ -51,12 +51,12 @@ func StartWebServer(cfg *config.Config) error {
 	}
 
 	job := &Job{
-		cancel: cancel,
+		cancel:   cancel,
 		backends: []backend.Backend{bq},
-		events: make(chan *backend.BigQuerySchema),
+		events:   make(chan *backend.BigQuerySchema),
 	}
 
-	go watch.StartWatcher(ctx, cfg, cfg.FlagBufferSize, cfg.UploadInterval, job.backends, job.events)
+	go watch.StartWatcher(ctx, cfg, job.backends, job.events)
 
 	router := mux.NewRouter()
 	router.Path("/incoming").Handler(middleware(http.HandlerFunc(event), job)).Methods("POST")

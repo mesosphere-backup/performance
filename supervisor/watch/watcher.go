@@ -18,26 +18,25 @@ import (
 type Event map[string]interface{}
 
 // StartWatcher starts watching host systemd units
-func StartWatcher(ctx context.Context, cfg *config.Config, buffer int, uploadInterval time.Duration,
-	          backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) error {
+func StartWatcher(ctx context.Context, cfg *config.Config, backends []backend.Backend,
+	eventChan <-chan *backend.BigQuerySchema) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	resultChan := make(chan *SystemdUnitStatus)
 
-	go processResult(ctx, buffer, uploadInterval, resultChan, backends, eventChan)
+	go processResult(ctx, cfg, resultChan, backends, eventChan)
 
 	for {
 		if err := processUnits(ctx, cfg, resultChan); err != nil {
-			return err
+			logrus.Error(err)
 		}
 
 		select {
 		case <-ctx.Done():
 			logrus.Info("Shutting down watcher")
 			close(resultChan)
-			return nil
 
 		case <-time.After(cfg.Wait):
 		}
@@ -77,7 +76,7 @@ func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *config
 	}
 
 	select {
-	case <- ctx.Done():
+	case <-ctx.Done():
 		return
 	default:
 		resultChan <- &SystemdUnitStatus{
@@ -88,8 +87,8 @@ func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *config
 	}
 }
 
-func processResult(ctx context.Context, bufferSize int, uploadInterval time.Duration, results <-chan *SystemdUnitStatus,
-	           backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) {
+func processResult(ctx context.Context, cfg *config.Config, results <-chan *SystemdUnitStatus,
+	backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) {
 	rows := []*backend.BigQueryRow{}
 	updateTime := time.Now()
 	hostname, err := os.Hostname()
@@ -114,17 +113,17 @@ func processResult(ctx context.Context, bufferSize int, uploadInterval time.Dura
 				result.CPUUsage.User, result.CPUUsage.System, result.CPUUsage.Total)
 
 			row := backend.BigQuerySchema{
-				Name: result.Name,
-				Timestamp: time.Now(),
-				UserCPU_Usage: result.CPUUsage.User,
+				Name:            result.Name,
+				Timestamp:       time.Now(),
+				UserCPU_Usage:   result.CPUUsage.User,
 				SystemCPU_Usage: result.CPUUsage.User,
-				TotalCPU_Usage: result.CPUUsage.Total,
-				Hostname: hostname,
-				Instance: strconv.Itoa(int(result.Pid)),
+				TotalCPU_Usage:  result.CPUUsage.Total,
+				Hostname:        hostname,
+				Instance:        strconv.Itoa(int(result.Pid)),
 			}
 
 			rows = append(rows, row.ToBigQueryRow())
-			if len(rows) >= bufferSize || time.Since(updateTime) >= uploadInterval {
+			if len(rows) >= cfg.FlagBufferSize || time.Since(updateTime) >= cfg.UploadInterval {
 				if err := upload(ctx, rows, backends); err != nil {
 					logrus.Error(err)
 					continue
@@ -138,10 +137,10 @@ func processResult(ctx context.Context, bufferSize int, uploadInterval time.Dura
 
 func upload(ctx context.Context, items interface{}, backends []backend.Backend) error {
 	for _, b := range backends {
-		logrus.Infof("Uploading to storage %s", b.ID())
 		if err := b.Put(ctx, items); err != nil {
 			return fmt.Errorf("Error uploading to backend %s: %s", b.ID(), err)
 		}
+		logrus.Infof("Uploaded to storage %s", b.ID())
 	}
 	return nil
 }

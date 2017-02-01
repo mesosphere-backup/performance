@@ -15,13 +15,13 @@ type Config struct {
 	FlagVerbose            bool
 	FlagWebServerBind      string
 	FlagWaitBetweenCollect string
-	FlagCPUUsageInterval string
-	FlagUploadInterval string
+	FlagCPUUsageInterval   string
+	FlagUploadInterval     string
 
 	// bigquery config
-	FlagProjectID string
-	FlagDataSet string
-	FlagTableName string
+	FlagProjectID  string
+	FlagDataSet    string
+	FlagTableName  string
 	FlagBufferSize int
 
 	// unexported values
