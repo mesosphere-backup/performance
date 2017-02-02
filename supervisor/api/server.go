@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mesosphere/journald-scale-test/supervisor/backend"
 	"github.com/mesosphere/journald-scale-test/supervisor/config"
+	"github.com/mesosphere/journald-scale-test/supervisor/proc"
 	"github.com/mesosphere/journald-scale-test/supervisor/watch"
 )
 
@@ -23,7 +24,7 @@ type Job struct {
 
 	cancel   context.CancelFunc
 	backends []backend.Backend
-	events   chan *backend.BigQuerySchema
+	events   chan proc.Reporter
 }
 
 func newContextWithJob(ctx context.Context, job *Job, req *http.Request) context.Context {
@@ -57,7 +58,7 @@ func StartWebServer(cfg *config.Config) error {
 	job := &Job{
 		cancel:   cancel,
 		backends: []backend.Backend{bq},
-		events:   make(chan *backend.BigQuerySchema),
+		events:   make(chan proc.Reporter),
 	}
 
 	go watch.StartWatcher(ctx, cfg, job.backends, job.events)

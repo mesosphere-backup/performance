@@ -3,8 +3,6 @@ package watch
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -15,35 +13,34 @@ import (
 	"github.com/mesosphere/journald-scale-test/supervisor/systemd"
 )
 
-type Event map[string]interface{}
 
 // StartWatcher starts watching host systemd units
 func StartWatcher(ctx context.Context, cfg *config.Config, backends []backend.Backend,
-	eventChan <-chan *backend.BigQuerySchema) {
+	eventChan <-chan proc.Reporter) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	resultChan := make(chan *SystemdUnitStatus)
+	dataChan := make(chan []proc.Reporter)
 
-	go processResult(ctx, cfg, resultChan, backends, eventChan)
+	go processResult(ctx, cfg, dataChan, backends, eventChan)
 
 	for {
-		if err := processUnits(ctx, cfg, resultChan); err != nil {
+		if err := watchMetrics(ctx, cfg, dataChan); err != nil {
 			logrus.Error(err)
 		}
 
 		select {
 		case <-ctx.Done():
 			logrus.Info("Shutting down watcher")
-			close(resultChan)
+			close(dataChan)
 
 		case <-time.After(cfg.Wait):
 		}
 	}
 }
 
-func processUnits(ctx context.Context, cfg *config.Config, resultChan chan<- *SystemdUnitStatus) error {
+func watchMetrics(ctx context.Context, cfg *config.Config, dataChan chan<- []proc.Reporter) error {
 	units, err := systemd.GetSystemdUnitsProps()
 	if err != nil {
 		return fmt.Errorf("Unable to get a list of systemd units: %s", err)
@@ -52,32 +49,15 @@ func processUnits(ctx context.Context, cfg *config.Config, resultChan chan<- *Sy
 	wg := &sync.WaitGroup{}
 	for _, unit := range units {
 		wg.Add(1)
-		go handleUnit(ctx, unit, cfg, wg, resultChan)
+		go handleUnit(ctx, unit, cfg, wg, dataChan)
 	}
 
 	wg.Wait()
 	return nil
 }
 
-// SystemdUnitStatus a structure that holds systemd unit name, pid and cpu utilization by it.
-type SystemdUnitStatus struct {
-	Name     string
-	Pid      uint32
-	CPUUsage *proc.CPUPidUsage
-}
-
-func (s *SystemdUnitStatus) ToBigQuerySchema() *backend.BigQuerySchema {
-	return &backend.BigQuerySchema{
-		Name:            s.Name,
-		Timestamp:       time.Now(),
-		UserCPU_Usage:   s.CPUUsage.User,
-		SystemCPU_Usage: s.CPUUsage.User,
-		TotalCPU_Usage:  s.CPUUsage.Total,
-		Instance:        strconv.Itoa(int(s.Pid)),
-	}
-}
-
-func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *config.Config, wg *sync.WaitGroup, resultChan chan<- *SystemdUnitStatus) {
+func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *config.Config, wg *sync.WaitGroup,
+	        dataChan chan<- []proc.Reporter) {
 	defer wg.Done()
 
 	usage, err := proc.LoadByPID(int32(unit.Pid), cfg.CPUUsageInterval)
@@ -86,53 +66,48 @@ func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *config
 		return
 	}
 
+	data := []proc.Reporter{usage, unit}
+
 	select {
 	case <-ctx.Done():
 		return
 	default:
-		resultChan <- &SystemdUnitStatus{
-			Name:     unit.Name,
-			Pid:      unit.Pid,
-			CPUUsage: usage,
-		}
+		dataChan<- data
 	}
 }
 
-func processResult(ctx context.Context, cfg *config.Config, results <-chan *SystemdUnitStatus,
-	backends []backend.Backend, eventChan <-chan *backend.BigQuerySchema) {
-	rows := []*backend.BigQueryRow{}
+func processResult(ctx context.Context, cfg *config.Config, dataChan <-chan []proc.Reporter,
+	           backends []backend.Backend, eventChan <-chan proc.Reporter) {
+
+	rows := make([]map[string]interface{}, 0)
 	updateTime := time.Now()
-	hostname, err := os.Hostname()
-	if err != nil {
-		logrus.Errorf("Unable to determine hostname: %s", err)
-		hostname = "<undefined>"
-	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Infof("Shutting down result processor")
+			logrus.Infof("Shutting down row processor")
 			return
 
 		case event := <-eventChan:
-			if err := upload(ctx, []*backend.BigQueryRow{event.ToBigQueryRow()}, backends); err != nil {
+			if err := upload(ctx, event, backends); err != nil {
 				logrus.Errorf("Error saving a new event: %s", err)
 			}
 
-		case result := <-results:
-			logrus.Debugf("[%s]: User %f; System %f; Total %f", result.Name,
-				result.CPUUsage.User, result.CPUUsage.System, result.CPUUsage.Total)
+		case data := <-dataChan:
+			row := make(map[string]interface{})
+			for _, piece := range data {
+				for k, v := range piece.Data() {
+					row[k] = v
+				}
+			}
 
-			row := result.ToBigQuerySchema()
-			row.Hostname = hostname
-
-			rows = append(rows, row.ToBigQueryRow())
+			rows = append(rows, row)
 			if len(rows) >= cfg.FlagBufferSize || time.Since(updateTime) >= cfg.UploadInterval {
 				if err := upload(ctx, rows, backends); err != nil {
 					logrus.Error(err)
 					continue
 				}
-				rows = []*backend.BigQueryRow{}
+				rows = make([]map[string]interface{}, 0)
 				updateTime = time.Now()
 			}
 		}

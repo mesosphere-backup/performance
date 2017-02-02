@@ -1,6 +1,7 @@
 package systemd
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
@@ -11,6 +12,13 @@ import (
 type SystemdUnitProps struct {
 	Pid  uint32
 	Name string
+}
+
+func (s *SystemdUnitProps) Data() map[string]interface{} {
+	return map[string]interface{}{
+		"Name": s.Name,
+		"Instance": strconv.Itoa(int(s.Pid)),
+	}
 }
 
 // GetSystemdUnitsProps returns a list of systemd units available on a system.

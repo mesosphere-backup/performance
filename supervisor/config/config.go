@@ -19,6 +19,7 @@ type Config struct {
 	FlagUploadInterval     string
 
 	// bigquery config
+	FlagBackend    string
 	FlagProjectID  string
 	FlagDataSet    string
 	FlagTableName  string
@@ -38,6 +39,7 @@ func (c *Config) setFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.FlagUploadInterval, "upload-interval", c.FlagUploadInterval, "Set upload interval.")
 	fs.IntVar(&c.FlagBufferSize, "rows-buffer", c.FlagBufferSize, "Set rows buffer size.")
 
+	fs.StringVar(&c.FlagBackend, "backend", c.FlagBackend, "Use backends. Comma separated.")
 	fs.StringVar(&c.FlagProjectID, "project-id", c.FlagProjectID, "Set bigquery ProjectID.")
 	fs.StringVar(&c.FlagDataSet, "dataset", c.FlagDataSet, "Set bigquery dataset.")
 	fs.StringVar(&c.FlagTableName, "table", c.FlagTableName, "Set bigquery table name.")
