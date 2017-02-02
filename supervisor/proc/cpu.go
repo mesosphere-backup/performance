@@ -1,18 +1,32 @@
 package proc
 
 import (
+	"os"
 	"runtime"
 	"time"
 
+	"github.com/fatih/structs"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/process"
 )
 
+
+type Reporter interface {
+	Data() map[string]interface{}
+}
+
 // CPUPidUsage returns a cpu usage by pid.
 type CPUPidUsage struct {
-	User   float64
-	System float64
-	Total  float64
+	UserCPU_Usage   float64
+	SystemCPU_Usage float64
+	TotalCPU_Usage  float64
+
+	Hostname string
+	Timestamp time.Time
+}
+
+func (c *CPUPidUsage) Data() map[string]interface{} {
+	return structs.Map(c)
 }
 
 // LoadByPID returns a CPU load (user, system) by a pid within the interval
@@ -56,10 +70,17 @@ func calcCPULoad(before *cpuTimes, after *cpuTimes) (*CPUPidUsage, error) {
 	user := float64(runtime.NumCPU()) * (after.pidUser - before.pidUser) * 100 / (after.cpuTotal - before.cpuTotal)
 	system := float64(runtime.NumCPU()) * (after.pidSystem - before.pidSystem) * 100 / (after.cpuTotal - before.cpuTotal)
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "localhost"
+	}
+
 	return &CPUPidUsage{
-		User:   user,
-		System: system,
-		Total:  user + system,
+		UserCPU_Usage:   user,
+		SystemCPU_Usage: system,
+		TotalCPU_Usage:  user + system,
+		Hostname: hostname,
+		Timestamp: time.Now(),
 	}, nil
 }
 
