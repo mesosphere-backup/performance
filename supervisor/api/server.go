@@ -9,9 +9,9 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
-	"github.com/mesosphere/journald-scale-test/supervisor/backend"
-	"github.com/mesosphere/journald-scale-test/supervisor/config"
-	"github.com/mesosphere/journald-scale-test/supervisor/watch"
+	"github.com/mesosphere/performance/supervisor/backend"
+	"github.com/mesosphere/performance/supervisor/config"
+	"github.com/mesosphere/performance/supervisor/watch"
 )
 
 type key int
