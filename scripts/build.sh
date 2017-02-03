@@ -8,7 +8,6 @@ VERSION=${GIT_REF}
 REVISION=$(git rev-parse --short HEAD)
 
 export PATH="${GOPATH}/bin:${PATH}"
-export CGO_ENABLED=0
 
 function license_check {
     retval=0
@@ -32,19 +31,17 @@ function license_check {
 function build_journald_scale_test {
     #license_check
 
-    pushd "${SOURCE_DIR}/scale/cmd/journald-scale-test"
-    go build -a -o ${BUILD_DIR}/${COMPONENT}-${GIT_REF}       \
-        -ldflags "-X main.VERSION=${VERSION} -X main.REVISION=${REVISION}" \
-        *.go
-    popd
+		pushd ${SOURCE_DIR}
+    go build -o ${BUILD_DIR}/${COMPONENT}-${GIT_REF} \
+      -ldflags "-X main.VERSION=${VERSION} -X main.REVISION=${REVISION}" \
+      ${SOURCE_DIR}/test/cmd/journald-scale-test/main.go
 }
 
 function build_supervisor {
     #license_check
 
-    pushd "${SOURCE_DIR}/supervisor"
-    go build -a -o ${BUILD_DIR}/${COMPONENT}-${GIT_REF} *.go
-    popd
+    go build -o ${BUILD_DIR}/${COMPONENT}-${GIT_REF} \
+			${SOURCE_DIR}/supervisor/*.go
 }
 
 
