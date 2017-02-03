@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/mesosphere/journald-scale-test/supervisor/backend"
-	"github.com/mesosphere/journald-scale-test/supervisor/config"
-	"github.com/mesosphere/journald-scale-test/supervisor/proc"
-	"github.com/mesosphere/journald-scale-test/supervisor/systemd"
+	"github.com/mesosphere/performance/supervisor/backend"
+	"github.com/mesosphere/performance/supervisor/config"
+	"github.com/mesosphere/performance/supervisor/proc"
+	"github.com/mesosphere/performance/supervisor/systemd"
 )
 
 type Event map[string]interface{}
