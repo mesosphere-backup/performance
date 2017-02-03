@@ -4,8 +4,8 @@ import (
 	"os"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/mesosphere/journald-scale-test/supervisor/api"
-	"github.com/mesosphere/journald-scale-test/supervisor/config"
+	"github.com/mesosphere/performance/supervisor/api"
+	"github.com/mesosphere/performance/supervisor/config"
 )
 
 func main() {
