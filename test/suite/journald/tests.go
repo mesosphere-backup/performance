@@ -12,12 +12,12 @@ import (
 	"github.com/mesosphere/performance/test/http"
 )
 
-func newJournalSince(since time.Duration) (*sdjournal.Journal, error) {
+func newJournalSince() (*sdjournal.Journal, error) {
 	journal, err := sdjournal.NewJournal()
 	if err != nil {
 		return journal, err
 	}
-	journal.Wait(since)
+	//journal.Wait(since)
 
 	return journal, nil
 }
@@ -33,47 +33,55 @@ func droppedLogsDetector(ctx context.Context, supervisorURL string) error {
 		return err
 	}
 
-	lastJournalCheck := time.Since(time.Now())
-	jlog.Info("getting new journal")
+	//startedTime := time.Now()
+	//lastJournalCheck := time.Since(startedTime)
 
-	sdReader, err := newJournalSince(lastJournalCheck)
+	//jlog.Infof("Initialized new journal since %s", lastJournalCheck)
+	sdReader, err := newJournalSince()
 	if err != nil {
 		return err
 	}
 
-	jlog.Infof("Checking journal since %s", lastJournalCheck)
+	if err := sdReader.AddMatch("_SYSTEMD_UNIT=systemd-journald.service"); err != nil {
+		return err
+	}
+
+	detectedChan := make(chan string)
+
+	go func() error {
+		jlog.Info("getting journal entry")
+		entry, err := sdReader.GetDataValue("MESSAGE")
+		if err != nil {
+			return err
+		}
+		detectedChan <- entry
+		return nil
+	}()
+
 	for {
 
 		select {
 
 		case <-ctx.Done():
-			jlog.Info("Canceling dropped log detector routine")
+			jlog.Info("dropped log detector is done")
 			return nil
 
-		default:
-
-			jlog.Info("adding suppressed match")
-			if err := sdReader.AddMatch("Suppressed"); err != nil {
-				return err
-			}
-
-			jlog.Info("getting journal entry")
-			entry, err := sdReader.GetEntry()
-			if err != nil {
-				return err
-			}
-
-			jlog.Info("detecting fields from entry")
-			if len(entry.Fields) != 0 {
+		case entry := <-detectedChan:
+			jlog.Info("Dropped logs detcted")
+			jlog.Infof("MESSAGE: %s", entry)
+			if entry != "" {
 				jlog.Info("DROP LOG EVENT")
 				jlog.Warnf("%+v", entry)
 				if err := http.PostToSupervisor(supervisorURL, dropEvent); err != nil {
 					return err
 				}
 			}
-
+		default:
+			//incrementTime := time.Since(startedTime)
+			jlog.Warnf("No drop events detected")
+			//sdReader.Wait(incrementTime)
+			time.Sleep(1 * time.Second)
 		}
-
 	}
 
 	return nil
