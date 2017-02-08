@@ -3,7 +3,6 @@ package systemd
 import (
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/coreos/go-systemd/dbus"
 )
 
@@ -32,24 +31,20 @@ func GetSystemdUnitsProps() ([]*SystemdUnitProps, error) {
 		prop, err := conn.GetUnitTypeProperty(unitStatus.Name, "Service", "MainPID")
 		if err != nil {
 			// skip non service units or the ones lacking MainPID.
-			logrus.Debugf("Skipped %s: %s", unitStatus.Name, err)
 			continue
 		}
 
 		mainPID, ok := prop.Value.Value().(uint32)
 		if !ok {
 			// expecting uint32 value for mainPID
-			logrus.Debugf("Skipped unit %s value %v cannot be type asserted to uint32", unitStatus.Name, prop.Value.Value())
 			continue
 		}
 
 		if mainPID == 0 {
-			logrus.Debugf("Skipped unit %s has MainPID value = 0.")
 			continue
 		}
 
-		if strings.HasPrefix(prop.Name, "ssh@") {
-			logrus.Debugf("Skipped ssh session")
+		if strings.HasPrefix(unitStatus.Name, "sshd@") || strings.HasPrefix(unitStatus.Name, "getty@"){
 			continue
 		}
 
