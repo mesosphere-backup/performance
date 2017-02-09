@@ -93,6 +93,12 @@
 			"revision": ""
 		},
 		{
+			"checksumSHA1": "UP2wONSE346WHWwT20G1Xedd6ZI=",
+			"path": "github.com/google/uuid",
+			"revision": "064e2069ce9c359c118179501254f67d7d37ba24",
+			"revisionTime": "2016-11-28T19:12:14Z"
+		},
+		{
 			"checksumSHA1": "V/53BpqgOkSDZCX6snQCAkdO2fM=",
 			"origin": "github.com/mesosphere/vendor/github.com/googleapis/gax-go",
 			"path": "github.com/googleapis/gax-go",
