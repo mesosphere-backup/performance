@@ -9,12 +9,15 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-const server = "server"
+const server = "api-server"
 
 type Config struct {
 	FlagVerbose      bool
 	FlagPollInterval string
 	FlagPostURL string
+
+	FlagClusterID string
+	FlagRole string
 
 	interval time.Duration
 	cpuWait time.Duration
@@ -24,6 +27,8 @@ func (c *Config) setFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.FlagVerbose, "verbose", c.FlagVerbose, "Print out verbose output.")
 	fs.StringVar(&c.FlagPollInterval, "interval", c.FlagPollInterval, "Set metrics collection interval.")
 	fs.StringVar(&c.FlagPostURL, "post-url", c.FlagPostURL, "Set API URL.")
+	fs.StringVar(&c.FlagClusterID, "cluster-id", c.FlagClusterID, "Set cluster ID.")
+	fs.StringVar(&c.FlagRole, "role", c.FlagRole, "Set role.")
 }
 
 func NewConfig(args []string) (c *Config, err error) {
@@ -59,6 +64,10 @@ func NewConfig(args []string) (c *Config, err error) {
 	c.interval = i - c.cpuWait
 	if c.interval < 2 {
 		return nil, fmt.Errorf("Interval time must be >= %s", c.cpuWait + time.Second)
+	}
+
+	if c.FlagRole == "" || c.FlagClusterID == "" {
+		return nil, errors.New("-role and -cluster-id are required")
 	}
 
 	return c, nil

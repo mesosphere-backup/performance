@@ -1,9 +1,9 @@
 package main
 
 import (
-	"os"
-	"fmt"
 	"context"
+	"fmt"
+	"os"
 )
 
 func main() {

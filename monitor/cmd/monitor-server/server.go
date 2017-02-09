@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/mesosphere/performance/api/bigquery"
 	"github.com/mesosphere/performance/monitor/proc"
 	"github.com/mesosphere/performance/monitor/systemd"
 )
@@ -84,6 +86,10 @@ func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *Config
 }
 
 func processResult(ctx context.Context, client *http.Client, cfg *Config, results <-chan *SystemdUnitStatus, cancel context.CancelFunc) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -91,7 +97,8 @@ func processResult(ctx context.Context, client *http.Client, cfg *Config, result
 			return
 
 		case result := <-results:
-			if err := postResult(client, cfg, result); err != nil {
+			logrus.Infof("Received result: %+v", result)
+			if err := postResult(client, cfg, result, hostname); err != nil {
 				logrus.Error(err)
 				cancel()
 			}
@@ -99,8 +106,26 @@ func processResult(ctx context.Context, client *http.Client, cfg *Config, result
 	}
 }
 
-func postResult(client *http.Client, cfg *Config, result *SystemdUnitStatus) error {
-	body, err := json.Marshal(result)
+func postResult(client *http.Client, cfg *Config, result *SystemdUnitStatus, hostname string) error {
+
+	data := bigquery.EventData{
+		"systemd_unit": result.Name,
+		"interval": cfg.interval.Seconds(),
+		"user_cpu": result.CPUUsage.User,
+		"system_cpu": result.CPUUsage.System,
+		"total_cpu": result.CPUUsage.Total,
+	}
+
+	event := bigquery.Event{
+		UploadTimeout: "2s",
+		Table: "systemd_monitor_data",
+		ClusterID: cfg.FlagClusterID,
+		NodeType: cfg.FlagRole,
+		Hostname: hostname,
+		Data: data,
+	}
+
+	body, err := json.Marshal(event)
 	if err != nil {
 		return err
 	}
