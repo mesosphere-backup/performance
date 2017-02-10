@@ -119,7 +119,6 @@ func postResult(client *http.Client, cfg *Config, unitsStatus []*SystemdUnitStat
 	for _, unitStatus := range unitsStatus {
 		eventData := &bigquery.EventData{
 			"systemd_unit": unitStatus.Name,
-			"interval":     cfg.interval.Seconds() + cfg.cpuWait.Seconds(),
 			"user_cpu":     unitStatus.CPUUsage.User,
 			"system_cpu":   unitStatus.CPUUsage.System,
 			"total_cpu":    unitStatus.CPUUsage.Total,

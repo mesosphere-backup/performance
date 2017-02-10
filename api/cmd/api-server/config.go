@@ -3,10 +3,10 @@ package main
 import (
 	"errors"
 	"flag"
+	"os"
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"os"
 )
 
 const server = "api-server"
