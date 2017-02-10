@@ -1,10 +1,10 @@
 .PHONY: all build clean
 
-all: clean build 
+all: clean build
 
 build:
-	bash -c "./scripts/build.sh supervisor"
-	bash -c "./scripts/build.sh journald_scale_test"
+	go build github.com/mesosphere/performance/api/cmd/api-server
+	go build github.com/mesosphere/performance/monitor/cmd/systemd-monitor
 
 
 clean:
