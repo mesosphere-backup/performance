@@ -111,7 +111,7 @@ func postResult(client *http.Client, cfg *Config, unitsStatus []*SystemdUnitStat
 	event := &bigquery.Event{
 		UploadTimeout: "5s",
 		Table: "systemd_monitor_data",
-		NodeType: cfg.FlagRole,
+		NodeType: cfg.FlagNodeType,
 		Hostname: hostname,
 	}
 

@@ -4,10 +4,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"os"
 )
 
 const server = "api-server"
@@ -18,7 +18,7 @@ type Config struct {
 	FlagPostURL string
 	FlagPostTimeout string
 
-	FlagRole string
+	FlagNodeType string
 
 	postTimeout time.Duration
 	interval time.Duration
@@ -29,7 +29,7 @@ func (c *Config) setFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.FlagVerbose, "verbose", c.FlagVerbose, "Print out verbose output.")
 	fs.StringVar(&c.FlagPollInterval, "interval", c.FlagPollInterval, "Set metrics collection interval.")
 	fs.StringVar(&c.FlagPostURL, "post-url", c.FlagPostURL, "Set API URL.")
-	fs.StringVar(&c.FlagRole, "role", c.FlagRole, "Set role.")
+	fs.StringVar(&c.FlagNodeType, "node-type", c.FlagNodeType, "Set node type.")
 	fs.StringVar(&c.FlagPostTimeout, "post-timeout", c.FlagPostTimeout, "Set timeout to execute a POST request.")
 }
 
@@ -46,8 +46,8 @@ func NewConfig(args []string) (c *Config, err error) {
 	}
 
 	envPrefix := "SYSTEMD_MONITOR_"
-	if v := os.Getenv(envPrefix+"ROLE"); v != "" {
-		c.FlagRole = v
+	if v := os.Getenv(envPrefix+"NODE_TYPE"); v != "" {
+		c.FlagNodeType = v
 	}
 
 	flagSet := flag.NewFlagSet(server, flag.ContinueOnError)
@@ -77,8 +77,8 @@ func NewConfig(args []string) (c *Config, err error) {
 		return nil, fmt.Errorf("Cannot parse post-timeout: %s", err)
 	}
 
-	if c.FlagRole == "" {
-		return nil, errors.New("-role is required")
+	if c.FlagNodeType == "" {
+		return nil, errors.New("-node-type is required")
 	}
 
 	return c, nil
