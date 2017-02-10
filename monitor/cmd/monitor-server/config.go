@@ -15,10 +15,12 @@ type Config struct {
 	FlagVerbose      bool
 	FlagPollInterval string
 	FlagPostURL string
+	FlagPostTimeout string
 
 	FlagClusterID string
 	FlagRole string
 
+	postTimeout time.Duration
 	interval time.Duration
 	cpuWait time.Duration
 }
@@ -29,6 +31,7 @@ func (c *Config) setFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.FlagPostURL, "post-url", c.FlagPostURL, "Set API URL.")
 	fs.StringVar(&c.FlagClusterID, "cluster-id", c.FlagClusterID, "Set cluster ID.")
 	fs.StringVar(&c.FlagRole, "role", c.FlagRole, "Set role.")
+	fs.StringVar(&c.FlagPostTimeout, "post-timeout", c.FlagPostTimeout, "Set timeout to execute a POST request.")
 }
 
 func NewConfig(args []string) (c *Config, err error) {
@@ -42,7 +45,8 @@ func NewConfig(args []string) (c *Config, err error) {
 
 	// default values
 	c.FlagPollInterval = "3s"
-	c.FlagPostURL = "http://127.0.0.1:9123/incoming"
+	c.FlagPostTimeout = "1s"
+	c.FlagPostURL = "http://127.0.0.1:9123/events"
 
 	flagSet := flag.NewFlagSet(server, flag.ContinueOnError)
 	c.setFlags(flagSet)
@@ -64,6 +68,11 @@ func NewConfig(args []string) (c *Config, err error) {
 	c.interval = i - c.cpuWait
 	if c.interval < 2 {
 		return nil, fmt.Errorf("Interval time must be >= %s", c.cpuWait + time.Second)
+	}
+
+	c.postTimeout, err = time.ParseDuration(c.FlagPostTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot parse post-timeout: %s", err)
 	}
 
 	if c.FlagRole == "" || c.FlagClusterID == "" {

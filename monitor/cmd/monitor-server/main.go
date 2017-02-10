@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 )
 
 func main() {
 	cfg, err := NewConfig(os.Args)
 	if err != nil {
-		panic(fmt.Sprint("Unable to load config: %s", err))
+		panic(err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

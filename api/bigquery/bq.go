@@ -54,7 +54,7 @@ type Event struct {
 	ClusterID string               `json:"cluster_id"`
 	NodeType string                `json:"node_type"`
 	Hostname string                `json:"hostname"`
-	Data EventData                 `json:"data"`
+	Data []EventData               `json:"data"`
 }
 
 func (e *Event) Validate() error {

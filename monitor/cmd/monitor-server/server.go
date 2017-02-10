@@ -24,22 +24,24 @@ type SystemdUnitStatus struct {
 }
 
 func StartWatcher(ctx context.Context, cfg *Config, cancel context.CancelFunc) {
-	resultChan := make(chan *SystemdUnitStatus)
-
 	client := &http.Client{
 		Transport: http.DefaultTransport,
 	}
 
-	go processResult(ctx, client, cfg, resultChan, cancel)
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
+
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				logrus.Info("Shutting down watcher")
-				close(resultChan)
 
 			case <-time.After(cfg.interval):
-				if err := processUnits(ctx, cfg, resultChan); err != nil {
+				logrus.Info("Start processUnits")
+				if err := processUnits(ctx, client, cfg, hostname); err != nil {
 					logrus.Error(err)
 				}
 			}
@@ -48,11 +50,13 @@ func StartWatcher(ctx context.Context, cfg *Config, cancel context.CancelFunc) {
 	<-ctx.Done()
 }
 
-func processUnits(ctx context.Context, cfg *Config, resultChan chan<- *SystemdUnitStatus) error {
+func processUnits(ctx context.Context, client *http.Client, cfg *Config, hostname string) error {
 	units, err := systemd.GetSystemdUnitsProps()
 	if err != nil {
 		return fmt.Errorf("Unable to get a list of systemd units: %s", err)
 	}
+
+	resultChan := make(chan *SystemdUnitStatus, len(units))
 
 	wg := &sync.WaitGroup{}
 	for _, unit := range units {
@@ -61,7 +65,7 @@ func processUnits(ctx context.Context, cfg *Config, resultChan chan<- *SystemdUn
 	}
 
 	wg.Wait()
-	return nil
+	return processResult(ctx, client, cfg, resultChan, hostname)
 }
 
 func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *Config, wg *sync.WaitGroup, resultChan chan<- *SystemdUnitStatus) {
@@ -85,44 +89,42 @@ func handleUnit(ctx context.Context, unit *systemd.SystemdUnitProps, cfg *Config
 	}
 }
 
-func processResult(ctx context.Context, client *http.Client, cfg *Config, results <-chan *SystemdUnitStatus, cancel context.CancelFunc) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown"
-	}
+func processResult(ctx context.Context, client *http.Client, cfg *Config, results <-chan *SystemdUnitStatus, hostname string) error {
+	var events []*SystemdUnitStatus
+
 	for {
 		select {
 		case <-ctx.Done():
 			logrus.Infof("Shutting down result processor")
-			return
+			return nil
 
-		case result := <-results:
-			logrus.Infof("Received result: %+v", result)
-			if err := postResult(client, cfg, result, hostname); err != nil {
-				logrus.Error(err)
-				cancel()
-			}
+		case event := <-results:
+			events = append(events, event)
+		default:
+			logrus.Infof("Collected %d events. Posting to %s", len(events), cfg.FlagPostURL)
+			return postResult(client, cfg, events, hostname)
 		}
 	}
 }
 
-func postResult(client *http.Client, cfg *Config, result *SystemdUnitStatus, hostname string) error {
-
-	data := bigquery.EventData{
-		"systemd_unit": result.Name,
-		"interval": cfg.interval.Seconds(),
-		"user_cpu": result.CPUUsage.User,
-		"system_cpu": result.CPUUsage.System,
-		"total_cpu": result.CPUUsage.Total,
-	}
-
-	event := bigquery.Event{
+func postResult(client *http.Client, cfg *Config, unitsStatus []*SystemdUnitStatus, hostname string) error {
+	event := &bigquery.Event{
 		UploadTimeout: "2s",
 		Table: "systemd_monitor_data",
 		ClusterID: cfg.FlagClusterID,
 		NodeType: cfg.FlagRole,
 		Hostname: hostname,
-		Data: data,
+	}
+
+	for _, unitStatus := range unitsStatus {
+		eventData := bigquery.EventData{
+			"systemd_unit": unitStatus.Name,
+			"interval":     cfg.interval.Seconds(),
+			"user_cpu":     unitStatus.CPUUsage.User,
+			"system_cpu":   unitStatus.CPUUsage.System,
+			"total_cpu":    unitStatus.CPUUsage.Total,
+		}
+		event.Data = append(event.Data, eventData)
 	}
 
 	body, err := json.Marshal(event)
@@ -135,8 +137,9 @@ func postResult(client *http.Client, cfg *Config, result *SystemdUnitStatus, hos
 	if err != nil {
 		return err
 	}
-
-	resp, err := client.Do(req)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.postTimeout)
+	defer cancel()
+	resp, err := client.Do(req.WithContext(ctx))
 	if err != nil {
 		return err
 	}
