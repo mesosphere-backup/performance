@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -36,7 +37,7 @@ func middleware(next http.Handler, job *APIServer) http.Handler {
 }
 
 func NewAPIServer(ctx context.Context, cfg *Config) (*APIServer, error) {
-	bq, err := bigquery.NewBigQuery(ctx, cfg.ProjectID)
+	bq, err := bigquery.NewBigQuery(ctx, cfg.FlagProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +46,7 @@ func NewAPIServer(ctx context.Context, cfg *Config) (*APIServer, error) {
 		BigQuery: bq,
 		Cfg: cfg,
 
-		eventStreamUploader: bq.Client.Dataset(cfg.Dataset).Table(cfg.EventStreamTableName).Uploader(),
+		eventStreamUploader: bq.Client.Dataset(cfg.FlagDataset).Table(cfg.FlagEventStreamTableName).Uploader(),
 	}
 
 	go api.startEventTimer(ctx)
@@ -54,9 +55,9 @@ func NewAPIServer(ctx context.Context, cfg *Config) (*APIServer, error) {
 }
 
 type eventBuffer struct {
-	EventStreamRows []bigquery.EventData
+	EventStreamRow *bigquery.EventData
 
-	EventRows       []bigquery.EventData
+	EventRows       []*bigquery.EventData
 	EventUploader  *googleBigquery.Uploader
 	Timeout        time.Duration
 }
@@ -81,7 +82,7 @@ func (a *APIServer) startEventTimer(ctx context.Context) {
 
 		case <-time.After(time.Second*5):
 			// if we have enough events, flush everything
-			if len(a.eventsBuffer) >= a.Cfg.EventBuffer {
+			if len(a.eventsBuffer) >= a.Cfg.FlagEventBuffer {
 				logrus.Infof("Buffer is full. Collected %d events. Uploading", len(a.eventsBuffer))
 				err := a.FlushEventBuffer()
 				if err != nil {
@@ -113,10 +114,10 @@ func (a *APIServer) FlushEventBuffer() error {
 		if bufferedEvent.Timeout > 0 {
 			ctx, cancel = context.WithTimeout(context.Background(), bufferedEvent.Timeout)
 		} else {
-			ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel = context.WithTimeout(context.Background(), time.Second*5)
 		}
 
-		if err := a.eventStreamUploader.Put(ctx, bufferedEvent.EventStreamRows); err != nil {
+		if err := a.eventStreamUploader.Put(ctx, bufferedEvent.EventStreamRow); err != nil {
 			logrus.Error(err)
 			errs = append(errs, err.Error())
 		}
@@ -139,12 +140,11 @@ func (a *APIServer) FlushEventBuffer() error {
 }
 
 func (a *APIServer) SubmitEvent(e *bigquery.Event) error {
+	timestamp := time.Now().UTC()
+
 	if err := e.Validate(); err != nil {
 		return err
 	}
-
-
-	timestamp := time.Now().UTC()
 
 	var uploadTimeout time.Duration
 	if e.UploadTimeout != "" {
@@ -155,22 +155,20 @@ func (a *APIServer) SubmitEvent(e *bigquery.Event) error {
 		}
 	}
 
-	var eventStreamRows []bigquery.EventData
-	eventUploader := a.BigQuery.Client.Dataset(a.Cfg.Dataset).Table(e.Table).Uploader()
-	for _, eventData := range e.Data {
-		eventID := uuid.New().String()
+	eventID := uuid.New().String()
 
-		eventData["primary_key"] = eventID
-		eventData["timestamp"] = timestamp
-
-		eventStreamRows = append(eventStreamRows, bigquery.EventData{
-			"cluster_id": e.ClusterID,
-			"node_type": e.NodeType,
-			"event_id": eventID,
-			"hostname": e.Hostname,
-		})
+	eventStreamRow := &bigquery.EventData{
+		"cluster_id": e.ClusterID,
+		"node_type": e.NodeType,
+		"event_id": eventID,
+		"hostname": e.Hostname,
+		"timestamp": timestamp,
 	}
 
+	eventUploader := a.BigQuery.Client.Dataset(a.Cfg.FlagDataset).Table(e.Table).Uploader()
+	for _, eventData := range e.Data {
+		(*eventData)["event_id"] = eventID
+	}
 
 	if e.SendImmediately {
 		logrus.Info("Uploading an event immediately")
@@ -181,11 +179,11 @@ func (a *APIServer) SubmitEvent(e *bigquery.Event) error {
 		if uploadTimeout > 0 {
 			ctx, cancel = context.WithTimeout(context.Background(), uploadTimeout)
 		} else {
-			ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel = context.WithTimeout(context.Background(), time.Second*5)
 		}
 		defer cancel()
 
-		if err := a.eventStreamUploader.Put(ctx, eventStreamRows); err != nil {
+		if err := a.eventStreamUploader.Put(ctx, eventStreamRow); err != nil {
 			return err
 		}
 		return eventUploader.Put(ctx, e.Data)
@@ -193,35 +191,15 @@ func (a *APIServer) SubmitEvent(e *bigquery.Event) error {
 
 	a.Lock()
 	a.eventsBuffer = append(a.eventsBuffer, &eventBuffer{
-		EventStreamRows: eventStreamRows,
+		EventStreamRow: eventStreamRow,
 
 		EventRows: e.Data,
 		EventUploader: eventUploader,
 		Timeout: uploadTimeout,
 	})
 	a.Unlock()
-	logrus.Infof("After insert")
 
 	return nil
-}
-
-// Config
-type Config struct {
-	ProjectID string
-	Dataset string
-	EventStreamTableName string
-	EventBuffer int
-	EventUploadInterval time.Duration
-}
-
-func NewConfig() (*Config, error) {
-	return &Config{
-		ProjectID: "massive-bliss-781",
-		Dataset: "dcos_performance",
-		EventStreamTableName: "event_stream",
-		EventBuffer: 500,
-		EventUploadInterval: time.Second * 5,
-	}, nil
 }
 
 func startServer(ctx context.Context, cfg *Config) error {
@@ -238,20 +216,22 @@ func startServer(ctx context.Context, cfg *Config) error {
 }
 
 func main() {
-	cfg, err := NewConfig()
+	cfg, err := NewConfig(os.Args)
 	if err != nil {
 		panic(err)
 	}
 
 	ctx := context.Background()
 
-	panic(startServer(ctx, cfg))
+	if err := startServer(ctx, cfg); err != nil {
+		panic(err)
+	}
 }
 
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	api := requestJobFromContext(r.Context())
 
-	var event *bigquery.Event
+	var event bigquery.Event
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&event); err != nil {
 		http.Error(w, "Unable to unmarshal user input", http.StatusBadRequest)
@@ -263,7 +243,7 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := api.SubmitEvent(event); err != nil {
+	if err := api.SubmitEvent(&event); err != nil {
 		logrus.Errorf("Unable to submit an event: %s", err)
 		http.Error(w, "Internal server error: "+err.Error(), http.StatusInternalServerError)
 		return

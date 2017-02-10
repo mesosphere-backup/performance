@@ -109,7 +109,7 @@ func processResult(ctx context.Context, client *http.Client, cfg *Config, result
 
 func postResult(client *http.Client, cfg *Config, unitsStatus []*SystemdUnitStatus, hostname string) error {
 	event := &bigquery.Event{
-		UploadTimeout: "2s",
+		UploadTimeout: "5s",
 		Table: "systemd_monitor_data",
 		ClusterID: cfg.FlagClusterID,
 		NodeType: cfg.FlagRole,
@@ -117,9 +117,9 @@ func postResult(client *http.Client, cfg *Config, unitsStatus []*SystemdUnitStat
 	}
 
 	for _, unitStatus := range unitsStatus {
-		eventData := bigquery.EventData{
+		eventData := &bigquery.EventData{
 			"systemd_unit": unitStatus.Name,
-			"interval":     cfg.interval.Seconds(),
+			"interval":     cfg.interval.Seconds() + cfg.cpuWait.Seconds(),
 			"user_cpu":     unitStatus.CPUUsage.User,
 			"system_cpu":   unitStatus.CPUUsage.System,
 			"total_cpu":    unitStatus.CPUUsage.Total,

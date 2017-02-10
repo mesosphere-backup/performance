@@ -54,13 +54,14 @@ type Event struct {
 	ClusterID string               `json:"cluster_id"`
 	NodeType string                `json:"node_type"`
 	Hostname string                `json:"hostname"`
-	Data []EventData               `json:"data"`
+	Data []*EventData              `json:"data"`
 }
 
 func (e *Event) Validate() error {
 	// TODO: ready the required fields from a tag
 	if e.Table == "" || len(e.Data) == 0 || e.ClusterID == "" || e.NodeType == "" || e.Hostname == "" {
-		return errors.New("Invalid event")
+		return errors.New("Invalid event headers")
 	}
+
 	return nil
 }
