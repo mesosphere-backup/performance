@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"os"
 )
 
 const server = "api-server"
@@ -41,12 +42,19 @@ func NewConfig(args []string) (c *Config, err error) {
 
 	c = &Config{
 		cpuWait: time.Second * 2,
+		FlagPollInterval: "3s",
+		FlagPostTimeout: "1s",
+		FlagPostURL: "http://127.0.0.1:9123/events",
 	}
 
-	// default values
-	c.FlagPollInterval = "3s"
-	c.FlagPostTimeout = "1s"
-	c.FlagPostURL = "http://127.0.0.1:9123/events"
+	envPrefix := "SYSTEMD_MONITOR_"
+	if v := os.Getenv(envPrefix+"CLUSTER_ID"); v != "" {
+		c.FlagClusterID = v
+	}
+
+	if v := os.Getenv(envPrefix+"ROLE"); v != "" {
+		c.FlagRole = v
+	}
 
 	flagSet := flag.NewFlagSet(server, flag.ContinueOnError)
 	c.setFlags(flagSet)
