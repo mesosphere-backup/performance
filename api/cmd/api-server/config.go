@@ -20,6 +20,7 @@ type Config struct {
 	FlagEventStreamTableName string
 	FlagEventBuffer          int
 	FlagEventFlushInterval   string
+	FlagClusterID string
 
 	EventUploadInterval      time.Duration
 }
@@ -31,6 +32,7 @@ func (c *Config) setFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.FlagEventStreamTableName, "event-stream-table", c.FlagEventStreamTableName, "Set event stream table name.")
 	fs.IntVar(&c.FlagEventBuffer, "event-buffer-size", c.FlagEventBuffer, "Set buffer size for events.")
 	fs.StringVar(&c.FlagEventFlushInterval, "flush-buffer", c.FlagEventFlushInterval, "Set upload to bigquery interval.")
+	fs.StringVar(&c.FlagClusterID, "cluster-id", c.FlagClusterID, "Set cluster ID.")
 }
 
 func NewConfig(args []string) (*Config, error) {
@@ -47,6 +49,10 @@ func NewConfig(args []string) (*Config, error) {
 	}
 
 	envPrefix := "API_SERVER_"
+	if v := os.Getenv(envPrefix+"CLUSTER_ID"); v != "" {
+		c.FlagClusterID = v
+	}
+
 	if v := os.Getenv(envPrefix+"PROJECT_ID"); v != "" {
 		c.FlagProjectID = v
 	}
@@ -75,6 +81,10 @@ func NewConfig(args []string) (*Config, error) {
 	c.EventUploadInterval, err = time.ParseDuration(c.FlagEventFlushInterval)
 	if err != nil {
 		return nil, err
+	}
+
+	if c.FlagClusterID == "" {
+		return nil, errors.New("-cluster-config is required.")
 	}
 
 	return c, nil

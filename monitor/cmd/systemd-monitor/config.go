@@ -18,7 +18,6 @@ type Config struct {
 	FlagPostURL string
 	FlagPostTimeout string
 
-	FlagClusterID string
 	FlagRole string
 
 	postTimeout time.Duration
@@ -30,7 +29,6 @@ func (c *Config) setFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.FlagVerbose, "verbose", c.FlagVerbose, "Print out verbose output.")
 	fs.StringVar(&c.FlagPollInterval, "interval", c.FlagPollInterval, "Set metrics collection interval.")
 	fs.StringVar(&c.FlagPostURL, "post-url", c.FlagPostURL, "Set API URL.")
-	fs.StringVar(&c.FlagClusterID, "cluster-id", c.FlagClusterID, "Set cluster ID.")
 	fs.StringVar(&c.FlagRole, "role", c.FlagRole, "Set role.")
 	fs.StringVar(&c.FlagPostTimeout, "post-timeout", c.FlagPostTimeout, "Set timeout to execute a POST request.")
 }
@@ -48,10 +46,6 @@ func NewConfig(args []string) (c *Config, err error) {
 	}
 
 	envPrefix := "SYSTEMD_MONITOR_"
-	if v := os.Getenv(envPrefix+"CLUSTER_ID"); v != "" {
-		c.FlagClusterID = v
-	}
-
 	if v := os.Getenv(envPrefix+"ROLE"); v != "" {
 		c.FlagRole = v
 	}
@@ -83,8 +77,8 @@ func NewConfig(args []string) (c *Config, err error) {
 		return nil, fmt.Errorf("Cannot parse post-timeout: %s", err)
 	}
 
-	if c.FlagRole == "" || c.FlagClusterID == "" {
-		return nil, errors.New("-role and -cluster-id are required")
+	if c.FlagRole == "" {
+		return nil, errors.New("-role is required")
 	}
 
 	return c, nil

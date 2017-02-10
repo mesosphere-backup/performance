@@ -158,7 +158,7 @@ func (a *APIServer) SubmitEvent(e *bigquery.Event) error {
 	eventID := uuid.New().String()
 
 	eventStreamRow := &bigquery.EventData{
-		"cluster_id": e.ClusterID,
+		"cluster_id": a.Cfg.FlagClusterID,
 		"node_type": e.NodeType,
 		"event_id": eventID,
 		"hostname": e.Hostname,
