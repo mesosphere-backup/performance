@@ -1,12 +1,16 @@
 package journald
 
 import (
-	"github.com/mesosphere/performance/supervisor/backend"
+	"github.com/mesosphere/performance/api/bigquery"
 	"github.com/shirou/gopsutil/host"
 )
 
-func newEvent(name string) (backend.BigQuerySchema, error) {
-	event := backend.BigQuerySchema{}
+func newEvent(name string) (bigquery.Event, error) {
+	event := bigquery.Event{
+		SendImmediately: true,
+		Table: "TABLE_NAME_HERE",
+		NodeType: "ROLE_HERE",
+	}
 
 	hostname, err := getHostname()
 	if err != nil {
@@ -18,9 +22,11 @@ func newEvent(name string) (backend.BigQuerySchema, error) {
 	if err != nil {
 		return event, err
 	}
-	event.Instance = taskID
 
-	event.Name = name
+	data := &bigquery.EventData{
+		"task_id": taskID,
+	}
+	event.Data = []*bigquery.EventData{data}
 
 	return event, nil
 }

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/mesosphere/performance/supervisor/backend"
+	"github.com/mesosphere/performance/api/bigquery"
 )
 
 /*
@@ -31,7 +31,7 @@ type JournaldTestSuite struct {
 	StdErr       bool
 	TestDuration int
 	TestType     string
-	EventChan    chan backend.BigQuerySchema
+	EventChan    chan bigquery.Event
 	Context      context.Context
 }
 
@@ -41,7 +41,7 @@ func NewTestSuite(logRate, testDuration int, testType string, stdErr bool) (Jour
 
 	return JournaldTestSuite{
 		LoggingRate:  logRate,
-		EventChan:    make(chan backend.BigQuerySchema),
+		EventChan:    make(chan bigquery.Event),
 		StdErr:       stdErr,
 		TestDuration: testDuration,
 		TestType:     testType,
@@ -57,7 +57,7 @@ func (j JournaldTestSuite) Run(supervisorURL string) error {
 	return nil
 }
 
-func (j JournaldTestSuite) GetEvent() chan backend.BigQuerySchema {
+func (j JournaldTestSuite) GetEvent() chan bigquery.Event {
 	return j.EventChan
 }
 

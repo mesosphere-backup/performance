@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/mesosphere/performance/supervisor/backend"
+	"github.com/mesosphere/performance/api/bigquery"
 )
 
 var slog = logrus.WithFields(logrus.Fields{
@@ -14,7 +14,7 @@ var slog = logrus.WithFields(logrus.Fields{
 // ScaleTester represents a generic scale test suite
 type ScaleTester interface {
 	Run(string) error
-	GetEvent() chan backend.BigQuerySchema
+	GetEvent() chan bigquery.Event
 	GetContext() context.Context
 }
 
