@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-
-	"github.com/mesosphere/performance/supervisor/backend"
+	
+	"github.com/mesosphere/performance/api/bigquery"
 )
 
-func PostToSupervisor(url string, event backend.BigQuerySchema) error {
+func PostToSupervisor(url string, event bigquery.Event) error {
 	fmt.Println("Sending to %s", url)
 	json, err := json.Marshal(event)
 	if err != nil {

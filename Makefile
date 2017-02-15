@@ -1,11 +1,10 @@
 .PHONY: all build clean
 
-all: clean build 
+all: clean build
 
 build:
-	bash -c "./scripts/build.sh supervisor"
-	bash -c "./scripts/build.sh journald_scale_test"
+	go build ./...
 
 
 clean:
-	rm -rf ./build
+	rm -f ./api-server ./graphite ./systemd-monitor
